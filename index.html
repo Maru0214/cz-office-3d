@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CrazyZero オフィス リニューアル 3Dモデル</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", sans-serif; }
+  #app { width: 100%; height: 100%; display: block; }
+
+  .panel {
+    position: absolute; top: 16px; left: 16px;
+    background: rgba(255,255,255,0.92);
+    border: 1px solid #e6ddcd;
+    border-left: 5px solid #c89b5a;
+    border-radius: 12px;
+    padding: 14px 16px;
+    box-shadow: 0 6px 24px rgba(80,60,30,0.12);
+    max-width: 310px;
+    color: #3a3024;
+    backdrop-filter: blur(4px);
+  }
+  .panel h1 { font-size: 15px; letter-spacing: .02em; margin-bottom: 4px; color: #5a4326; }
+  .panel .sub { font-size: 11px; color:#9a8a72; margin-bottom: 10px; }
+  .panel .legend { font-size: 11.5px; line-height: 1.7; color:#5b4f3d; }
+  .panel .legend b { color:#7a5a2c; }
+  .dot { display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:6px; vertical-align:middle; }
+  .cap { margin-top:9px; padding-top:8px; border-top:1px dashed #e0d6c4; font-size:11.5px; color:#6a5b45; }
+  .cap b { color:#b07b2e; font-size:13px; }
+
+  .controls { position: absolute; top: 16px; right: 16px; display:flex; flex-direction:column; gap:8px; }
+  .btn {
+    background: rgba(255,255,255,0.95);
+    border: 1px solid #e6ddcd;
+    border-radius: 10px;
+    padding: 9px 14px;
+    font-size: 12.5px; font-weight: 600;
+    color: #5a4326; cursor: pointer;
+    box-shadow: 0 3px 12px rgba(80,60,30,0.10);
+    transition: all .15s; text-align:center; min-width: 178px;
+  }
+  .btn:hover { background:#fff; transform: translateY(-1px); box-shadow: 0 5px 16px rgba(80,60,30,0.16); }
+  .btn.active { background:#c89b5a; color:#fff; border-color:#b88a45; }
+
+  .hint {
+    position:absolute; bottom:14px; left:50%; transform:translateX(-50%);
+    background: rgba(255,255,255,0.85); border:1px solid #e6ddcd;
+    border-radius: 20px; padding:7px 16px; font-size:11.5px; color:#7a6a52;
+    box-shadow:0 3px 12px rgba(80,60,30,0.10);
+  }
+  .badge { position:absolute; bottom:14px; right:16px; font-size:10.5px; color:#a89a82; }
+</style>
+</head>
+<body>
+<canvas id="app"></canvas>
+
+<div class="panel">
+  <h1>CrazyZero オフィス リニューアル</h1>
+  <div class="sub">約20m × 10m / 全面ウッド調プラン（最大席版）</div>
+  <div class="legend">
+    <span class="dot" style="background:#c8a877"></span><b>集中作業エリア</b>（島型デスク × 3）<br>
+    <span class="dot" style="background:#caa46a"></span><b>協働テーブル</b>（並んで作業＆全体MTG）<br>
+    <span class="dot" style="background:#d8cbb8"></span><b>ラウンジ／食事</b>（入口すぐ左）<br>
+    <span class="dot" style="background:#bfe0ea"></span><b>個室ブース 6×4m</b>（打合せ・モニター・プリンター）<br>
+    <span class="dot" style="background:#9aa0a6"></span><b>壁際カウンター＋モニター</b>（右壁7席＋個室の角2席）
+  </div>
+  <div class="cap">作業席 <b>18</b> ＋ 協働 <b>6</b> ＋ 壁際 <b>9</b> ＋ 個室 <b>6</b></div>
+</div>
+
+<div class="controls">
+  <div class="btn active" id="btnFloor">床: リニューアル（木目）</div>
+  <div class="btn" id="btnView">視点をリセット</div>
+  <div class="btn" id="btnSide">横から見る</div>
+  <div class="btn" id="btnTop">真上から見る</div>
+  <div class="btn" id="btnRotate">▶ 自動回転</div>
+</div>
+
+<div class="hint">ドラッグ=回転 ／ ホイール=ズーム ／ 右ドラッグ=移動</div>
+<div class="badge">CrazyZero AX推進 ・ 3D提案モデル</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+// ---------- 基本セットアップ ----------
+const canvas = document.getElementById('app');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+const scene = new THREE.Scene();
+// 背景：淡いグラデーション
+const bgC=document.createElement('canvas'); bgC.width=2; bgC.height=256;
+const bgG=bgC.getContext('2d'); const grd=bgG.createLinearGradient(0,0,0,256);
+grd.addColorStop(0,'#f5f8fb'); grd.addColorStop(1,'#dde4ea'); bgG.fillStyle=grd; bgG.fillRect(0,0,2,256);
+const bgTex=new THREE.CanvasTexture(bgC); bgTex.colorSpace=THREE.SRGBColorSpace;
+scene.background = bgTex;
+scene.fog = new THREE.Fog('#e7ebef', 48, 95);
+
+const camera = new THREE.PerspectiveCamera(45, innerWidth/innerHeight, 0.1, 500);
+const HOME = new THREE.Vector3(17, 15, 19);
+camera.position.copy(HOME);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.target.set(0, 1.2, 0);
+controls.maxPolarAngle = Math.PI/2 - 0.02;
+controls.minDistance = 6;
+controls.maxDistance = 60;
+
+// ---------- ライティング ----------
+scene.add(new THREE.HemisphereLight('#ffffff', '#d8cdbb', 0.95));
+scene.add(new THREE.AmbientLight('#fff6e8', 0.35));
+const sun = new THREE.DirectionalLight('#fff3e0', 1.05);
+sun.position.set(-14, 24, 12);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+const S = 22;
+sun.shadow.camera.left = -S; sun.shadow.camera.right = S;
+sun.shadow.camera.top = S; sun.shadow.camera.bottom = -S;
+sun.shadow.camera.near = 1; sun.shadow.camera.far = 80;
+sun.shadow.bias = -0.0003;
+scene.add(sun);
+const fill = new THREE.DirectionalLight('#eaf2ff', 0.3);
+fill.position.set(15, 12, -8); scene.add(fill);
+
+// ---------- 寸法 ----------
+const HX = 10, HZ = 5, WH = 2.7;
+const T = 0.15;
+
+// ---------- テクスチャ / マテリアル ----------
+function woodTexture(base, plank, opts={}) {
+  const c = document.createElement('canvas'); c.width = 512; c.height = 512;
+  const g = c.getContext('2d');
+  g.fillStyle = base; g.fillRect(0,0,512,512);
+  const plankH = opts.plankH || 64;
+  for (let y=0; y<512; y+=plankH) {
+    const v = (Math.sin(y*12.9898)*43758.5)%1; const t = (v<0?v+1:v);
+    g.fillStyle = plank; g.globalAlpha = 0.12 + t*0.18; g.fillRect(0, y, 512, plankH-1); g.globalAlpha = 1;
+    g.strokeStyle = opts.line || 'rgba(90,60,30,0.30)'; g.lineWidth = 2;
+    g.beginPath(); g.moveTo(0,y); g.lineTo(512,y); g.stroke();
+    g.strokeStyle = 'rgba(120,85,45,0.10)'; g.lineWidth = 1;
+    for (let i=0;i<5;i++){
+      const yy = y + 6 + i*11 + (Math.sin((y+i)*7.1)*4);
+      g.beginPath(); g.moveTo(0,yy);
+      g.bezierCurveTo(170, yy+(i%2?3:-3), 340, yy-(i%2?3:-3), 512, yy); g.stroke();
+    }
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace; tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  return tex;
+}
+
+const floorWoodTex = woodTexture('#c8a877', '#a9824f', { plankH: 42 });
+floorWoodTex.repeat.set(8, 4);
+const floorWoodMat = new THREE.MeshStandardMaterial({ map: floorWoodTex, roughness: 0.72, metalness: 0.02 });
+
+const blueTex = (()=>{
+  const c = document.createElement('canvas'); c.width=256; c.height=256;
+  const g=c.getContext('2d'); g.fillStyle='#3f5d86'; g.fillRect(0,0,256,256);
+  for(let x=0;x<256;x+=64)for(let y=0;y<256;y+=64){
+    g.fillStyle = ((x/64+y/64)%2)? '#3a5680':'#47628c'; g.fillRect(x,y,64,64);
+  }
+  g.strokeStyle='rgba(255,255,255,0.05)';
+  for(let i=0;i<=256;i+=64){g.beginPath();g.moveTo(i,0);g.lineTo(i,256);g.stroke();g.beginPath();g.moveTo(0,i);g.lineTo(256,i);g.stroke();}
+  const t=new THREE.CanvasTexture(c); t.colorSpace=THREE.SRGBColorSpace; t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(20,10); return t;
+})();
+const floorBlueMat = new THREE.MeshStandardMaterial({ map: blueTex, roughness: 0.95 });
+
+const wallMat   = new THREE.MeshStandardMaterial({ color: '#f4efe6', roughness: 0.95 });
+const wallMat2  = new THREE.MeshStandardMaterial({ color: '#ece5d8', roughness: 0.95 });
+const deskWoodTex = woodTexture('#d8b483', '#b98a52', { plankH: 80, line:'rgba(120,80,40,0.18)' });
+deskWoodTex.repeat.set(1.4,1);
+const deskMat   = new THREE.MeshStandardMaterial({ map: deskWoodTex, roughness: 0.5, metalness: 0.05 });
+const metalMat  = new THREE.MeshStandardMaterial({ color: '#cfcfd3', roughness: 0.4, metalness: 0.6 });
+const darkMat   = new THREE.MeshStandardMaterial({ color: '#3a3d42', roughness: 0.6 });
+const blackMat  = new THREE.MeshStandardMaterial({ color: '#222428', roughness: 0.5 });
+const screenMat = new THREE.MeshStandardMaterial({ color: '#1c1f24', roughness: 0.3, emissive:'#11202e', emissiveIntensity:0.4 });
+const sofaMat   = new THREE.MeshStandardMaterial({ color: '#d8cbb4', roughness: 0.9 });
+const glassMat  = new THREE.MeshPhysicalMaterial({ color:'#cfe6ef', roughness:0.05, metalness:0, transmission:0.9, transparent:true, opacity:0.32, thickness:0.4, side:THREE.DoubleSide });
+const frameMat  = new THREE.MeshStandardMaterial({ color:'#9aa0a6', roughness:0.4, metalness:0.5 });
+const rugMat    = new THREE.MeshStandardMaterial({ color:'#e7decb', roughness:1 });
+const plantMat  = new THREE.MeshStandardMaterial({ color:'#5f9357', roughness:0.85 });
+const potMat    = new THREE.MeshStandardMaterial({ color:'#cdbfa6', roughness:0.8 });
+const accentMat = new THREE.MeshStandardMaterial({ color:'#cf7a4a', roughness:0.7 });
+
+function addBox(w,h,d,x,y,z,mat,rotY=0,cast=true,recv=true){
+  const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+  m.position.set(x,y,z); m.rotation.y=rotY; m.castShadow=cast; m.receiveShadow=recv;
+  scene.add(m); return m;
+}
+
+// ---------- 床 ----------
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(2*HX, 2*HZ), floorWoodMat);
+floor.rotation.x = -Math.PI/2; floor.receiveShadow = true;
+scene.add(floor);
+// 左下のくぼみ（約3m × 1m）
+const nook = new THREE.Mesh(new THREE.PlaneGeometry(3, 1), floorWoodMat);
+nook.rotation.x = -Math.PI/2; nook.receiveShadow = true; nook.position.set(-8.5, 0, -HZ-0.5);
+scene.add(nook);
+
+// ---------- 壁（カメラ手前の壁は低い角度で自動的に隠す＝ドールハウス表示） ----------
+const walls = [];
+function wall(w,h,d,x,y,z, axis, coord, sign, mat=wallMat){
+  const m = addBox(w,h,d,x,y,z,mat,0,false,true);
+  m.userData = { axis, coord, sign }; walls.push(m); return m;
+}
+// 奥の長い壁 (z=+HZ)
+wall(2*HX, WH, T, 0, WH/2, HZ, 'z', HZ, 1, wallMat);
+// 右の短い壁 (x=+HX) … 窓なし
+wall(T, WH, 2*HZ, HX, WH/2, 0, 'x', HX, 1, wallMat2);
+// 左の短い壁 (x=-HX) … 窓は奥側(z=0..HZ)の断片だけ
+wall(T, WH, (0-(-HZ-1)), -HX, WH/2, (-HZ-1+0)/2, 'x', -HX, -1, wallMat2);
+const winZ0 = 0, winZ1 = HZ, winLen = winZ1-winZ0;
+wall(T, 0.45, winLen, -HX, 0.225, (winZ0+winZ1)/2, 'x', -HX, -1, wallMat2); // 腰壁
+wall(T, 0.30, winLen, -HX, WH-0.15, (winZ0+winZ1)/2, 'x', -HX, -1, wallMat2); // 上枠
+wall(T, WH, 0.1, -HX, WH/2, winZ0, 'x', -HX, -1, wallMat2); // 窓手前の縦枠
+const glass = new THREE.Mesh(new THREE.PlaneGeometry(winLen, WH-0.75), glassMat);
+glass.rotation.y = Math.PI/2; glass.position.set(-HX+0.02, 0.45+(WH-0.75)/2, (winZ0+winZ1)/2);
+glass.userData = { axis:'x', coord:-HX, sign:-1 }; walls.push(glass); scene.add(glass);
+for(let z=winZ0+1; z<winZ1; z+=2){
+  const mul = addBox(0.06, WH-0.6, 0.08, -HX+0.04, (0.45+WH-0.3)/2, z, frameMat, 0,false,false);
+  mul.userData = { axis:'x', coord:-HX, sign:-1 }; walls.push(mul);
+}
+// 手前の長い壁 (z=-HZ) … 入口(左から約2割の位置 x≈-5.5)を空ける + 左下くぼみ
+wall(15, WH, T, 2.5, WH/2, -HZ, 'z', -HZ, -1, wallMat);   // 右パート x=-5..10
+wall(3, WH, T, -8.5, WH/2, -HZ-1, 'z', -HZ, -1, wallMat); // くぼみ前面 x=-10..-7 (z=-6)
+wall(T, WH, 1, -7, WH/2, -HZ-0.5, 'z', -HZ, -1, wallMat2); // くぼみ段差 x=-7
+wall(1, WH, T, -6.5, WH/2, -HZ, 'z', -HZ, -1, wallMat);   // 入口右の袖壁 x=-7..-6
+// 入口の隙間 x=-6..-5
+
+// 窓の外（左側・奥）
+const sky = new THREE.Mesh(new THREE.PlaneGeometry(20, 22), new THREE.MeshBasicMaterial({ color:'#cfe6f2' }));
+sky.rotation.y = Math.PI/2; sky.position.set(-HX-6, 6, 2.5); scene.add(sky);
+for(let i=0;i<5;i++){
+  const h = 4 + ((Math.sin(i*3.3)*0.5+0.5))*7;
+  addBox(2.2, h, 0.5, -HX-5.5, h/2, 0.5+i*1.2, new THREE.MeshBasicMaterial({color:'#bcd2de'}),0,false,false);
+}
+
+// ---------- 天井照明（吊りライン） ----------
+const lightMat = new THREE.MeshStandardMaterial({ color:'#ffffff', emissive:'#fff4df', emissiveIntensity:0.8, roughness:0.4 });
+for(let i=0;i<3;i++){ addBox(11, 0.08, 0.18, 3, WH-0.25, -2.5+i*3, lightMat, 0,false,false); }
+
+// ---------- 家具パーツ ----------
+function makeMonitor(x,y,z,rotY=0,w=0.62,h=0.38){
+  const grp=new THREE.Group();
+  const panel=new THREE.Mesh(new THREE.BoxGeometry(w,h,0.04), blackMat); panel.position.y=h/2+0.16;
+  const scr=new THREE.Mesh(new THREE.PlaneGeometry(w-0.06,h-0.06), screenMat); scr.position.set(0,h/2+0.16,0.025);
+  const neck=new THREE.Mesh(new THREE.CylinderGeometry(0.02,0.02,0.16), darkMat); neck.position.y=0.08;
+  const base=new THREE.Mesh(new THREE.CylinderGeometry(0.11,0.13,0.02), darkMat); base.position.y=0.01;
+  grp.add(panel,scr,neck,base); grp.position.set(x,y,z); grp.rotation.y=rotY;
+  grp.traverse(o=>o.castShadow=true); scene.add(grp); return grp;
+}
+function makeChair(x,z,rotY=0){
+  const g=new THREE.Group();
+  const seat=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.08,0.5), darkMat); seat.position.y=0.48;
+  const back=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.55,0.07), darkMat); back.position.set(0,0.78,-0.23);
+  const post=new THREE.Mesh(new THREE.CylinderGeometry(0.035,0.035,0.4), metalMat); post.position.y=0.26;
+  const star=new THREE.Group();
+  for(let i=0;i<5;i++){
+    const leg=new THREE.Mesh(new THREE.BoxGeometry(0.32,0.04,0.06), blackMat);
+    leg.position.set(Math.cos(i/5*Math.PI*2)*0.16,0.05,Math.sin(i/5*Math.PI*2)*0.16);
+    leg.rotation.y=-i/5*Math.PI*2; star.add(leg);
+    const caster=new THREE.Mesh(new THREE.SphereGeometry(0.04), blackMat);
+    caster.position.set(Math.cos(i/5*Math.PI*2)*0.3,0.04,Math.sin(i/5*Math.PI*2)*0.3); star.add(caster);
+  }
+  g.add(seat,back,post,star); g.position.set(x,0,z); g.rotation.y=rotY;
+  g.traverse(o=>{o.castShadow=true;o.receiveShadow=true;}); scene.add(g); return g;
+}
+function makeDesk(x,z,rotY=0,w=1.4,d=0.7){
+  const g=new THREE.Group();
+  const top=new THREE.Mesh(new THREE.BoxGeometry(w,0.05,d), deskMat); top.position.y=0.72; g.add(top);
+  for(const sx of [-1,1]) for(const sz of [-1,1]){
+    const leg=new THREE.Mesh(new THREE.BoxGeometry(0.06,0.72,0.06), metalMat);
+    leg.position.set(sx*(w/2-0.06), 0.36, sz*(d/2-0.06)); g.add(leg);
+  }
+  g.position.set(x,0,z); g.rotation.y=rotY;
+  g.traverse(o=>{o.castShadow=true;o.receiveShadow=true;}); scene.add(g); return g;
+}
+
+// 集中作業エリア：背中合わせ6人島（2列×3）
+function deskPod(cx,cz){
+  for(let i=0;i<3;i++){
+    const x = cx + (i-1)*1.55;
+    // +z 側の列（中央を向く）
+    makeDesk(x, cz+0.55, 0);
+    makeMonitor(x, 0.74, cz+0.28, Math.PI);
+    makeChair(x, cz+1.05, Math.PI);
+    // -z 側の列
+    makeDesk(x, cz-0.55, 0);
+    makeMonitor(x, 0.74, cz-0.28, 0);
+    makeChair(x, cz-1.05, 0);
+  }
+  addBox(4.7, 0.4, 0.06, cx, 0.95, cz, deskMat); // 中央パーティション
+}
+deskPod(0.5,  2.6);
+deskPod(6.5,  2.6);
+deskPod(6.5, -2.4);
+
+// ---------- ラウンジ／食事スペース（入口すぐ左） ----------
+(function lounge(){
+  const cx=-7.8, cz=-3.0;
+  const rug=new THREE.Mesh(new THREE.PlaneGeometry(4.2,3.4), rugMat);
+  rug.rotation.x=-Math.PI/2; rug.position.set(cx,0.01,cz); rug.receiveShadow=true; scene.add(rug);
+  function sofa(w,d,x,z,ry){
+    const g=new THREE.Group();
+    const base=new THREE.Mesh(new THREE.BoxGeometry(w,0.18,d), sofaMat); base.position.y=0.18; g.add(base);
+    const seat=new THREE.Mesh(new THREE.BoxGeometry(w,0.18,d), sofaMat); seat.position.y=0.36;
+    const back=new THREE.Mesh(new THREE.BoxGeometry(w,0.45,0.18), sofaMat); back.position.set(0,0.6,-d/2+0.09);
+    const cush=new THREE.Mesh(new THREE.BoxGeometry(w-0.1,0.12,d-0.2), new THREE.MeshStandardMaterial({color:'#e7ddc9',roughness:0.95})); cush.position.set(0,0.48,0.05);
+    g.add(seat,back,cush); g.position.set(x,0,z); g.rotation.y=ry;
+    g.traverse(o=>{o.castShadow=true;o.receiveShadow=true;}); scene.add(g);
+  }
+  sofa(2.6,0.85,cx,cz-1.2,0);
+  sofa(0.85,2.0,cx-1.55,cz-0.1,0);
+  // 食事も兼ねる木目テーブル
+  const tbl=new THREE.Mesh(new THREE.BoxGeometry(1.4,0.06,0.8), deskMat); tbl.position.set(cx,0.4,cz+0.2); tbl.castShadow=true; scene.add(tbl);
+  for(const sx of[-1,1])for(const sz of[-1,1]){const l=new THREE.Mesh(new THREE.BoxGeometry(0.05,0.4,0.05),deskMat);l.position.set(cx+sx*0.6,0.2,cz+0.2+sz*0.32);l.castShadow=true;scene.add(l);}
+  const p1=new THREE.Mesh(new THREE.BoxGeometry(0.35,0.12,0.35),accentMat);p1.position.set(cx+0.7,0.5,cz-1.1);p1.castShadow=true;scene.add(p1);
+})();
+
+// ---------- 観葉植物 ----------
+function plant(x,z,scale=1){
+  const g=new THREE.Group();
+  const pot=new THREE.Mesh(new THREE.CylinderGeometry(0.22,0.16,0.4), potMat); pot.position.y=0.2; g.add(pot);
+  for(let i=0;i<6;i++){
+    const leaf=new THREE.Mesh(new THREE.SphereGeometry(0.28,8,8), plantMat);
+    leaf.scale.set(0.5,1.1,0.5);
+    leaf.position.set(Math.cos(i*1.7)*0.14, 0.6+(i%3)*0.16, Math.sin(i*1.7)*0.14);
+    leaf.rotation.z=Math.cos(i)*0.3; g.add(leaf);
+  }
+  g.scale.setScalar(scale); g.position.set(x,0,z);
+  g.traverse(o=>o.castShadow=true); scene.add(g);
+}
+plant(0.5, 4.6, 1.0);
+plant(-3.5, 4.4, 1.0);
+plant(-2.0, -4.4, 0.95);
+
+// ---------- 個室ブース（左奥の角 6m×4m / 打合せゾーン） ----------
+(function booth(){
+  const bx0=-HX, bx1=-4, bz0=1, bz1=HZ;
+  // 内側ガラス間仕切り x=-4（z=1..5）
+  addBox(0.05, WH, bz1-bz0, bx1, WH/2, (bz0+bz1)/2, glassMat, 0, false, false);
+  // 内側ガラス間仕切り z=1（x=-10..-4）… ドアの隙間(左寄り x≈-8.5)
+  addBox(3.6, WH, 0.05, (bx1+(-7.6))/2, WH/2, bz0, glassMat, 0, false, false); // x=-7.6..-4
+  addBox(0.6, WH, 0.05, -9.7, WH/2, bz0, glassMat, 0, false, false);           // x=-10..-9.4
+  for(const [fx,fz] of [[bx0,bz0],[bx0,bz1],[bx1,bz0]]) addBox(0.1,WH,0.1,fx,WH/2,fz,frameMat,0,false,false);
+  addBox(0.1,WH,0.1, bx1, WH/2, (bz0+bz1)/2, frameMat,0,false,false);
+  addBox(0.1,WH,0.1, -7.6, WH/2, bz0, frameMat,0,false,false);
+  addBox(0.1,WH,0.1, -9.4, WH/2, bz0, frameMat,0,false,false);
+  addBox(bx1-bx0,0.12,0.1, (bx0+bx1)/2, WH-0.06, bz0, frameMat,0,false,false);
+  addBox(0.1,0.12,bz1-bz0, bx1, WH-0.06, (bz0+bz1)/2, frameMat,0,false,false);
+  // ドア
+  const door=new THREE.Group();
+  const dframe=new THREE.Mesh(new THREE.BoxGeometry(0.06,WH-0.2,1.7), frameMat);
+  const dglass=new THREE.Mesh(new THREE.BoxGeometry(0.03,WH-0.5,1.5), glassMat);
+  door.add(dframe,dglass); door.position.set(-8.5,WH/2,bz0); door.rotation.y=-0.5;
+  scene.add(door);
+
+  // 打合せテーブル（木目・6人掛け）個室中央 x=-7, z=3.0
+  const tcx=-7, tcz=3.0;
+  const top=new THREE.Mesh(new THREE.BoxGeometry(2.4,0.07,1.1), deskMat); top.position.set(tcx,0.73,tcz); top.castShadow=true; top.receiveShadow=true; scene.add(top);
+  for(const sx of[-1,1]) for(const sz of[-1,1]){
+    const leg=new THREE.Mesh(new THREE.BoxGeometry(0.06,0.73,0.06), metalMat); leg.position.set(tcx+sx*1.05,0.365,tcz+sz*0.42); leg.castShadow=true; scene.add(leg);
+  }
+  // 椅子：長辺に3脚ずつ・計6人。短辺(x=-10)の上座モニターを見る配置
+  for(let i=-1;i<=1;i++){
+    makeChair(tcx+i*0.8, tcz-0.95, 0);        // 手前列 → +zを向く
+    makeChair(tcx+i*0.8, tcz+0.95, Math.PI);  // 奥列 → -zを向く
+  }
+  // 壁掛けモニター（個室の短辺＝x=-10 側／上座）
+  const wm=new THREE.Mesh(new THREE.BoxGeometry(0.06,0.85,1.5), blackMat); wm.position.set(bx0+0.08,1.5,tcz); wm.castShadow=true; scene.add(wm);
+  const ws=new THREE.Mesh(new THREE.PlaneGeometry(1.4,0.75), screenMat); ws.rotation.y=Math.PI/2; ws.position.set(bx0+0.12,1.5,tcz); scene.add(ws);
+  // キャスター型 可動モニター
+  const cm=new THREE.Group();
+  const stand=new THREE.Mesh(new THREE.BoxGeometry(0.06,1.3,0.06), metalMat); stand.position.y=0.75;
+  const cbase=new THREE.Mesh(new THREE.BoxGeometry(0.7,0.05,0.5), darkMat); cbase.position.y=0.05;
+  for(const sx of[-1,1])for(const sz of[-1,1]){const w=new THREE.Mesh(new THREE.SphereGeometry(0.05),blackMat);w.position.set(sx*0.3,0.03,sz*0.22);cm.add(w);}
+  const cpanel=new THREE.Mesh(new THREE.BoxGeometry(1.0,0.6,0.05), blackMat); cpanel.position.y=1.45;
+  const cscr=new THREE.Mesh(new THREE.PlaneGeometry(0.92,0.52), screenMat); cscr.position.set(0,1.45,0.03);
+  cm.add(stand,cbase,cpanel,cscr); cm.position.set(-5.0,0,4.0); cm.rotation.y=0.6;
+  cm.traverse(o=>o.castShadow=true); scene.add(cm);
+  plant(-9.4,4.4,0.9);
+})();
+
+// ---------- 追加：協働テーブル / 壁際カウンター / プリンター ----------
+(function extras(){
+  // (1) みんなで並んでやる協働テーブル（中央・全体MTGでも囲める）
+  const tcx=0.7, tcz=-2.5;
+  const top=new THREE.Mesh(new THREE.BoxGeometry(2.6,0.07,1.1), deskMat); top.position.set(tcx,0.73,tcz); top.castShadow=true; top.receiveShadow=true; scene.add(top);
+  for(const sx of[-1,1]){ const leg=new THREE.Mesh(new THREE.BoxGeometry(0.07,0.73,0.9), blackMat); leg.position.set(tcx+sx*1.1,0.365,tcz); leg.castShadow=true; scene.add(leg); }
+  for(let i=-1;i<=1;i++){
+    makeChair(tcx+i*0.85, tcz-0.95, 0);       // 手前側 → +zを向く
+    makeChair(tcx+i*0.85, tcz+0.95, Math.PI); // 奥側 → -zを向く
+  }
+
+  // (2) 壁際カウンター席（モニター付き）：右壁いっぱい＋打合せ側コーナー
+  function stool(x,z){
+    const g=new THREE.Group();
+    const seat=new THREE.Mesh(new THREE.CylinderGeometry(0.18,0.18,0.06), darkMat); seat.position.y=0.62;
+    const post=new THREE.Mesh(new THREE.CylinderGeometry(0.03,0.03,0.62), metalMat); post.position.y=0.31;
+    const base=new THREE.Mesh(new THREE.CylinderGeometry(0.17,0.17,0.03), darkMat); base.position.y=0.015;
+    g.add(seat,post,base); g.position.set(x,0,z); g.traverse(o=>o.castShadow=true); scene.add(g);
+  }
+  // 右壁カウンター（手前コーナー〜右奥コーナー / 7席）
+  {
+    const z0=-4.2, z1=4.2, len=z1-z0, cz=(z0+z1)/2;
+    const top=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.06,len), deskMat); top.position.set(HX-0.3,0.73,cz); top.castShadow=true; top.receiveShadow=true; scene.add(top);
+    addBox(0.5,0.7,0.06, HX-0.3,0.36,z0+0.2, deskMat);
+    addBox(0.5,0.7,0.06, HX-0.3,0.36,z1-0.2, deskMat);
+    for(let k=0;k<7;k++){ const z=z0+0.6+k*1.2; stool(HX-0.78,z); makeMonitor(HX-0.18,0.74,z,-Math.PI/2,0.55,0.34); }
+  }
+  // 打合せ個室の角に取り付けるモニターカウンター（2席・個室の右側面に沿わせる）
+  {
+    const z0=1.5, z1=3.7, len=z1-z0, cz=(z0+z1)/2, cx=-3.7;
+    const top=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.06,len), deskMat); top.position.set(cx,0.73,cz); top.castShadow=true; top.receiveShadow=true; scene.add(top);
+    addBox(0.5,0.7,0.06, cx,0.36,z0+0.2, deskMat);
+    addBox(0.5,0.7,0.06, cx,0.36,z1-0.2, deskMat);
+    for(let k=0;k<2;k++){ const z=z0+0.55+k*1.1; stool(cx+0.45,z); makeMonitor(cx-0.12,0.74,z,Math.PI/2,0.55,0.34); }
+  }
+
+  // (3) プリンター（打合せ個室の角に現状あり）
+  const printer=new THREE.Group();
+  const body=new THREE.Mesh(new THREE.BoxGeometry(0.6,0.55,0.55), new THREE.MeshStandardMaterial({color:'#e9e9ec',roughness:0.6})); body.position.y=0.78;
+  const tray=new THREE.Mesh(new THREE.BoxGeometry(0.62,0.04,0.4), darkMat); tray.position.set(0,0.5,0.1);
+  const cab=new THREE.Mesh(new THREE.BoxGeometry(0.6,0.5,0.55), deskMat); cab.position.y=0.25;
+  printer.add(body,tray,cab); printer.position.set(-3.7, 0, 1.2);
+  printer.traverse(o=>{o.castShadow=true;o.receiveShadow=true;}); scene.add(printer);
+})();
+
+// ---------- 床切り替え（before/after） ----------
+let isWood = true;
+const btnFloor = document.getElementById('btnFloor');
+btnFloor.addEventListener('click', ()=>{
+  isWood = !isWood;
+  floor.material = isWood ? floorWoodMat : floorBlueMat;
+  nook.material  = isWood ? floorWoodMat : floorBlueMat;
+  btnFloor.textContent = isWood ? '床: リニューアル（木目）' : '床: 現状（青いカーペット）';
+  btnFloor.classList.toggle('active', isWood);
+});
+
+// ---------- 視点ボタン ----------
+function fly(to, target){
+  const fromP=camera.position.clone(), fromT=controls.target.clone();
+  let t=0; (function anim(){ t+=0.04; if(t>1)t=1;
+    const e=t<0.5?2*t*t:1-Math.pow(-2*t+2,2)/2;
+    camera.position.lerpVectors(fromP,to,e);
+    controls.target.lerpVectors(fromT,target,e);
+    if(t<1) requestAnimationFrame(anim);
+  })();
+}
+document.getElementById('btnView').onclick = ()=> fly(HOME.clone(), new THREE.Vector3(0,1.2,0));
+document.getElementById('btnSide').onclick = ()=> fly(new THREE.Vector3(0, 7, 25), new THREE.Vector3(0,1.4,0));
+document.getElementById('btnTop').onclick  = ()=> fly(new THREE.Vector3(0.1,30,0.1), new THREE.Vector3(0,0,0));
+
+// 自動回転（プレゼン用）
+controls.autoRotate = false; controls.autoRotateSpeed = 0.8;
+let rotating = false;
+const btnRotate = document.getElementById('btnRotate');
+btnRotate.onclick = ()=>{
+  rotating = !rotating; controls.autoRotate = rotating;
+  btnRotate.textContent = rotating ? '⏸ 回転を止める' : '▶ 自動回転';
+  btnRotate.classList.toggle('active', rotating);
+};
+
+// ---------- ループ ----------
+addEventListener('resize', ()=>{
+  camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth,innerHeight);
+});
+(function loop(){
+  requestAnimationFrame(loop);
+  // 低い角度（横から覗くとき）だけ、カメラ手前側の壁を隠す
+  const lowAngle = camera.position.y < 11;
+  for(const m of walls){
+    const c = camera.position[m.userData.axis];
+    const outside = m.userData.sign * (c - m.userData.coord) > 0;
+    m.visible = !(outside && lowAngle);
+  }
+  controls.update(); renderer.render(scene,camera);
+})();
+</script>
+</body>
+</html>
